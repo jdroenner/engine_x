@@ -1,6 +1,7 @@
 use num_traits::One;
 use serde::{Deserialize, Serialize};
 use std::{
+    convert::TryInto,
     marker::PhantomData,
     ops::{Add, AddAssign},
 };
@@ -54,8 +55,8 @@ where
 
 /// A VectorSource Returns some kind of Vector data
 pub trait VectorSource {
-    type VektorType;
-    fn vector_query(&self, query: Query) -> Self::VektorType;
+    type VectorType;
+    fn vector_query(&self, query: Query) -> Self::VectorType;
 }
 
 /// A Source is a VectorSource if it returns Vector data...
@@ -63,9 +64,9 @@ impl<S, VD> VectorSource for S
 where
     S: Source<Output = VD>,
 {
-    type VektorType = VD;
+    type VectorType = VD;
 
-    fn vector_query(&self, query: Query) -> Self::VektorType {
+    fn vector_query(&self, query: Query) -> Self::VectorType {
         self.query(query)
     }
 }
@@ -86,7 +87,7 @@ struct GdalSource<T> {
 // It is a Source producing Raster<T> -> its a RasterSource
 impl<T> Source for GdalSource<T>
 where
-    T: Default + Copy + std::fmt::Debug,
+    T: Default + Copy,
 {
     type Output = Raster<T>;
     fn query(&self, _: Query) -> Self::Output {
@@ -188,6 +189,7 @@ where
 {
     type Output = Raster<T>;
     fn query(&self, query: Query) -> Self::Output {
+        println!("PlusOneOperator query");
         let mut r = self.source.query(query);
         r.v.iter_mut().for_each(|p| p.add_assign(T::one()));
         r
@@ -205,8 +207,45 @@ where
     }
 }
 
+/// The NoOp Operator does nothing. It wraps any Operator.
+#[derive(Debug, Clone)]
+struct AddRasterOperator<S1, S2> {
+    source: (S1, S2),
+}
+
+impl<T1, T2, S1, S2> Source for AddRasterOperator<S1, S2>
+where
+    S1: RasterSource<RasterType = T1>,
+    S2: RasterSource<RasterType = T2>,
+    T1: AddAssign + One + Copy + Clone + Sized,
+    T2: AddAssign + One + Copy + Clone + Sized + Into<T1>,
+{
+    type Output = Raster<T1>;
+    fn query(&self, query: Query) -> Self::Output {
+        println!("AddRasterOperator query");
+        let mut r1 = self.source.0.raster_query(query);
+        let r2 = self.source.1.raster_query(query);
+        r1.v.iter_mut()
+            .zip(r2.v.iter())
+            .for_each(|(p1, &p2)| p1.add_assign(p2.try_into().unwrap()));
+        r1
+    }
+}
+
+// impl Subgraph for NoOpOperator. TODO: find out if this is needed.
+impl<S1, S2> Subgraph for AddRasterOperator<S1, S2>
+where
+    S1: Source,
+    S2: Source,
+{
+    type Sources = (S1, S2);
+    fn sources(&self) -> &Self::Sources {
+        &self.source
+    }
+}
+
 /// A nice litte trait to add operations enable chaining all operators.
-trait OperatorExt: Source {
+trait VectorOperatorExt {
     /// wraps any operator inside a NoOpOperator
     fn noop(self) -> NoOpOperator<Self>
     where
@@ -229,20 +268,58 @@ trait OperatorExt: Source {
         }
     }
 
+    fn boxed_vector(self) -> Box<Self>
+    where
+        Self: Sized,
+    {
+        Box::new(self)
+    }
+}
+
+// implement the methods in OperatorExt for all Sources
+impl<S> VectorOperatorExt for S where S: VectorSource {}
+
+/// A nice litte trait to add operations enable chaining all operators.
+trait RasterOperatorExt {
+    /// wraps any operator inside a NoOpOperator
+    fn noop(self) -> NoOpOperator<Self>
+    where
+        Self: Sized,
+    {
+        NoOpOperator { source: self }
+    }
+
     fn plus_one(self) -> PlusOneOperator<Self>
     where
         Self: RasterSource + Sized,
     {
         PlusOneOperator { source: self }
     }
+
+    fn plus_raster<R2, T2>(self, other: R2) -> AddRasterOperator<Self, R2>
+    where
+        R2: RasterSource<RasterType = T2>,
+        Self: RasterSource + Sized,
+    {
+        AddRasterOperator {
+            source: (self, other),
+        }
+    }
+
+    fn boxed_raster(self) -> Box<Self>
+    where
+        Self: Sized,
+    {
+        Box::new(self)
+    }
 }
 
-// implement the methods in OperatorExt for all Sources
-impl<S> OperatorExt for S where S: Source {}
+impl<S> RasterOperatorExt for S where S: RasterSource {}
+
 // We need trait objects so allow RasterSource objects be a Source.
 impl<T> Source for Box<dyn RasterSource<RasterType = T>>
 where
-    T: StaticRasterType + Copy + std::fmt::Debug + 'static,
+    T: 'static,
 {
     type Output = Raster<T>;
     fn query(&self, query: Query) -> Self::Output {
@@ -250,19 +327,106 @@ where
     }
 }
 
-// We need trait objects so allow VectorSource objects be a Source.
-impl<V> Source for Box<dyn VectorSource<VektorType = V>>
+impl<T> Source for Box<dyn Source<Output = T>> {
+    type Output = T;
+    fn query(&self, query: Query) -> Self::Output {
+        self.as_ref().query(query)
+    }
+}
+
+trait CreateSourceOperator<P> {
+    fn create(params: P) -> Self;
+}
+
+impl<T> CreateSourceOperator<String> for GdalSource<T> {
+    fn create(params: String) -> Self {
+        GdalSource {
+            data: PhantomData,
+            dataset: params,
+        }
+    }
+}
+
+impl<T> CreateSourceOperator<String> for MyVectorSource<T> {
+    fn create(params: String) -> Self {
+        MyVectorSource {
+            data: PhantomData,
+            dataset: params,
+        }
+    }
+}
+
+trait CreateUnaryOperator<S> {
+    fn create(source: S) -> Self;
+}
+
+impl<S> CreateUnaryOperator<S> for NoOpOperator<S> {
+    fn create(source: S) -> Self {
+        NoOpOperator { source }
+    }
+}
+
+impl<S> CreateUnaryOperator<S> for PlusOneOperator<S> {
+    fn create(source: S) -> Self {
+        PlusOneOperator { source }
+    }
+}
+
+trait CreateBinaryOperator<S1, S2> {
+    fn create(source_a: S1, source_b: S2) -> Self;
+}
+
+impl<S1, S2> CreateBinaryOperator<S1, S2> for RasterVectorOperator<S1, S2>
 where
-    V: VectorData + std::fmt::Debug + 'static,
+    S1: VectorSource,
+    S2: RasterSource,
+{
+    fn create(source_a: S1, source_b: S2) -> Self {
+        RasterVectorOperator {
+            sources: (source_a, source_b),
+        }
+    }
+}
+
+impl<S1, S2> CreateBinaryOperator<S1, S2> for AddRasterOperator<S1, S2>
+where
+    S1: RasterSource,
+    S2: RasterSource,
+{
+    fn create(source_a: S1, source_b: S2) -> Self {
+        AddRasterOperator {
+            source: (source_a, source_b),
+        }
+    }
+}
+
+/**
+// We need trait objects so allow RasterSource objects be a Source.
+impl<T> Source for Box<dyn RasterSource<RasterType = T>>
+where
+    T: Copy + 'static,
+{
+    type Output = Raster<T>;
+    fn query(&self, query: Query) -> Self::Output {
+        self.as_ref().raster_query(query)
+    }
+}
+*/
+
+// We need trait objects so allow VectorSource objects be a Source.
+/*impl<V> Source for Box<dyn VectorSource<VectorType = V>>
+where
+    V: VectorData + 'static,
 {
     type Output = V;
     fn query(&self, query: Query) -> Self::Output {
         self.as_ref().vector_query(query)
     }
 }
+*/
 
 /// An enum for the Raster types.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, Copy)]
 pub enum RasterType {
     U8,
     U16,
@@ -339,12 +503,14 @@ trait MetaRasterOperator {
 
 /// The MetaGdalSource
 #[derive(Serialize, Deserialize, Debug, Clone)]
-struct MetaGdalSource {}
+struct MetaGdalSource {
+    raster_type: RasterType,
+}
 
 #[typetag::serde]
 impl MetaRasterOperator for MetaGdalSource {
     fn creates_type(&self) -> RasterCreates {
-        RasterCreates::ConceteType(RasterType::U8) // TODO: need to look this up!
+        RasterCreates::ConceteType(self.raster_type) // TODO: need to look this up!
     }
     fn requires_type(&self) -> &[RasterWants] {
         // NO inputs so no requirements
@@ -373,7 +539,7 @@ impl MetaRasterOperator for MetaGdalSource {
 /// The MetaNoopOperator
 #[derive(Serialize, Deserialize)]
 struct MetaNoopOperator {
-    sources: Vec<Box<dyn MetaRasterOperator + 'static>>,
+    sources: Vec<Box<dyn MetaRasterOperator>>,
 }
 
 // cant use constants in the crate bcause of typetag... -_-
@@ -393,23 +559,21 @@ impl MetaRasterOperator for MetaNoopOperator {
 
     fn create_u8_raster_op(&self) -> Box<dyn RasterSource<RasterType = u8>> {
         println!("MetaNoopOperator: create_u8_raster_op");
-        Box::new(
+        Box::new(RasterOperatorExt::noop(
             self.raster_sources()[0]
                 .create_raster_op()
                 .as_u8()
-                .expect("not u8")
-                .noop(),
-        )
+                .expect("not u8"),
+        ))
     }
     fn create_u16_raster_op(&self) -> Box<dyn RasterSource<RasterType = u16>> {
         println!("MetaNoopOperator: create_u16_raster_op");
-        Box::new(
+        Box::new(RasterOperatorExt::noop(
             self.raster_sources()[0]
                 .create_raster_op()
                 .as_u16()
-                .expect("not u8")
-                .noop(),
-        )
+                .expect("not u8"),
+        ))
     }
     fn raster_sources(&self) -> &[Box<dyn MetaRasterOperator>] {
         self.sources.as_slice()
@@ -418,7 +582,7 @@ impl MetaRasterOperator for MetaNoopOperator {
 
 #[derive(Serialize, Deserialize)]
 struct MetaPlusOneOperator {
-    sources: Vec<Box<dyn MetaRasterOperator + 'static>>,
+    sources: Vec<Box<dyn MetaRasterOperator>>,
 }
 
 #[typetag::serde]
@@ -432,23 +596,115 @@ impl MetaRasterOperator for MetaPlusOneOperator {
 
     fn create_u8_raster_op(&self) -> Box<dyn RasterSource<RasterType = u8>> {
         println!("MetaPlusOneOperator: create_u8_raster_op");
-        Box::new(
-            self.raster_sources()[0]
-                .create_raster_op()
-                .as_u8()
-                .expect("not u8")
-                .plus_one(),
-        )
+        let s = self.raster_sources()[0]
+            .create_raster_op()
+            .as_u8()
+            .expect("not u8");
+        s.plus_one().boxed_raster()
     }
     fn create_u16_raster_op(&self) -> Box<dyn RasterSource<RasterType = u16>> {
         println!("MetaPlusOneOperator: create_u16_raster_op");
-        Box::new(
-            self.raster_sources()[0]
-                .create_raster_op()
-                .as_u16()
-                .expect("not u16")
-                .plus_one(),
-        )
+        let s = self.raster_sources()[0]
+            .create_raster_op()
+            .as_u16()
+            .expect("not u16");
+
+        s.plus_one().boxed_raster()
+    }
+    fn raster_sources(&self) -> &[Box<dyn MetaRasterOperator>] {
+        self.sources.as_slice()
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+struct MetaAddRasterOperator {
+    sources: Vec<Box<dyn MetaRasterOperator>>,
+}
+
+/*
+trait BinaryFunc {
+    fn create<'a, T1, T2>(
+        s1: Box<dyn RasterSource<RasterType = T1>>,
+        s2: Box<dyn RasterSource<RasterType = T2>>,
+    ) -> Box<dyn 'a + RasterSource<RasterType = T1>>
+    where
+        T1: 'a + Add + AddAssign + Copy + Clone + One,
+        T2: 'a + Add + AddAssign + Copy + Clone + One + Into<T1>;
+}
+
+impl BinaryFunc for MetaAddRasterOperator {
+    fn create<'a, T1, T2>(
+        s1: Box<dyn RasterSource<RasterType = T1>>,
+        s2: Box<dyn RasterSource<RasterType = T2>>,
+    ) -> Box<dyn 'a + RasterSource<RasterType = T1>>
+    where
+        T1: 'a + Add + AddAssign + Copy + Clone + One,
+        T2: 'a + Add + AddAssign + Copy + Clone + One + Into<T1>,
+    {
+        Box::new(s1.plus_raster(s2))
+    }
+}
+
+fn binary_func<R, F: BinaryFunc>(
+    a: BoxedRasterOperatorInstance,
+    b: BoxedRasterOperatorInstance,
+) -> Box<dyn RasterSource<RasterType = R>>
+where
+{
+    match (a, b) {
+        (BoxedRasterOperatorInstance::U8(s1), BoxedRasterOperatorInstance::U8(s2)) => {
+            let c = F::create::<u8, u8>(s1, s2);
+            c
+            //Box::new(::create(s1, s2))
+        }
+        (BoxedRasterOperatorInstance::U8(s1), BoxedRasterOperatorInstance::U16(s2)) => {
+            unimplemented!()
+        }
+        (BoxedRasterOperatorInstance::U16(s1), BoxedRasterOperatorInstance::U8(s2)) => {
+            unimplemented!()
+        }
+        (BoxedRasterOperatorInstance::U16(s1), BoxedRasterOperatorInstance::U16(s2)) => {
+            unimplemented!()
+        }
+        _ => panic!(),
+    }
+}
+*/
+
+#[typetag::serde]
+impl MetaRasterOperator for MetaAddRasterOperator {
+    fn creates_type(&self) -> RasterCreates {
+        self.sources[0].creates_type()
+    }
+    fn requires_type(&self) -> &[RasterWants] {
+        &MetaNoopOperator::REQUIRES_TYPES
+    }
+
+    fn create_u8_raster_op(&self) -> Box<dyn RasterSource<RasterType = u8>> {
+        println!("MetaAddRasterOperator: create_u8_raster_op");
+        let source_a = self.sources[0].create_raster_op();
+        let source_b = self.sources[0].create_raster_op();
+        match (source_a, source_b) {
+            (BoxedRasterOperatorInstance::U8(s1), BoxedRasterOperatorInstance::U8(s2)) => {
+                AddRasterOperator::create(s1, s2).boxed_raster()
+            }
+            _ => panic!(),
+        }
+    }
+    fn create_u16_raster_op(&self) -> Box<dyn RasterSource<RasterType = u16>> {
+        println!("MetaAddRasterOperator: create_u16_raster_op");
+        let source_a = self.sources[0].create_raster_op();
+        let source_b = self.sources[0].create_raster_op();
+
+        match (source_a, source_b) {
+            (BoxedRasterOperatorInstance::U16(s1), BoxedRasterOperatorInstance::U8(s2)) => {
+                AddRasterOperator::create(s1, s2).boxed_raster()
+            }
+            (BoxedRasterOperatorInstance::U16(s1), BoxedRasterOperatorInstance::U16(s2)) => {
+                AddRasterOperator::create(s1, s2).boxed_raster()
+            }
+            _ => panic!(),
+        }
     }
     fn raster_sources(&self) -> &[Box<dyn MetaRasterOperator>] {
         self.sources.as_slice()
@@ -476,9 +732,42 @@ impl BoxedRasterOperatorInstance {
     }
 }
 
+trait AutoGenerateDynUnaryCombos: MetaRasterOperator {
+    fn auto_create_u8_raster_op<'a, O>(&self) -> Box<dyn RasterSource<RasterType = u8> + 'a>
+    where
+        O: 'a
+            + RasterSource<RasterType = u8>
+            + CreateUnaryOperator<Box<dyn RasterSource<RasterType = u8>>>,
+    {
+        println!("MetaPlusOneOperator: create_u8_raster_op");
+        let s = self.raster_sources()[0]
+            .create_raster_op()
+            .as_u8()
+            .expect("not u8");
+        O::create(s).boxed_raster()
+    }
+
+    fn auto_create_u16_raster_op<'a, O>(&self) -> Box<dyn RasterSource<RasterType = u16> + 'a>
+    where
+        O: 'a
+            + RasterSource<RasterType = u16>
+            + CreateUnaryOperator<Box<dyn RasterSource<RasterType = u16>>>,
+    {
+        println!("MetaPlusOneOperator: create_u16_raster_op");
+        let s = self.raster_sources()[0]
+            .create_raster_op()
+            .as_u16()
+            .expect("not u16");
+
+        O::create(s).boxed_raster()
+    }
+}
+
+impl AutoGenerateDynUnaryCombos for MetaPlusOneOperator {}
+
 fn main() {
     // a gdal source
-    let gdal_source: GdalSource<u8> = GdalSource {
+    let gdal_source: GdalSource<u16> = GdalSource {
         dataset: "meh".to_owned(),
         data: PhantomData,
     };
@@ -489,6 +778,15 @@ fn main() {
 
     let raster_plus_one = gdal_source.plus_one();
     let r = raster_plus_one.query(Query);
+    println!("{:?}", r);
+
+    let other_gdal_source: GdalSource<u8> = GdalSource {
+        dataset: "meh".to_owned(),
+        data: PhantomData,
+    };
+
+    let raster_plusone_plus_other = raster_plus_one.plus_raster(other_gdal_source);
+    let r = raster_plusone_plus_other.query(Query);
     println!("{:?}", r);
 
     // a vector source
@@ -504,7 +802,7 @@ fn main() {
     // take the vector_source, add a noop, combine the result with the raster_source wrapped in a noop
     let vector_noop_raster_noop_combine = vector_source
         .noop()
-        .add_raster_values(raster_plus_one.noop());
+        .add_raster_values(RasterOperatorExt::noop(raster_plusone_plus_other));
     // add more noops
     let vector_noop_raster_noop_combine_noop_noop = vector_noop_raster_noop_combine.noop().noop();
     // will produce the concrete vector type! (all known at compile time)
@@ -515,9 +813,15 @@ fn main() {
 
     // this is the magic dynamic stuff
     // create a MetaGdalSource
-    let meta_gdal_source = MetaGdalSource {};
+    let meta_gdal_source = MetaGdalSource {
+        raster_type: RasterType::U16,
+    };
     // put it in a box
     let meta_gdal_sourcein_a_box = Box::new(meta_gdal_source) as Box<dyn MetaRasterOperator>;
+
+    let other_meta_gdal_source = Box::new(MetaGdalSource {
+        raster_type: RasterType::U8,
+    }) as Box<dyn MetaRasterOperator>;
 
     // wrap it with a noop operator
     let meta_gdal_source_noop = MetaNoopOperator {
@@ -538,9 +842,17 @@ fn main() {
         ]),
     };
 
+    let meta_gdal_source_noop_noop_noop_noop_plusone_plusother = MetaAddRasterOperator {
+        sources: vec![
+            Box::new(meta_gdal_source_noop_noop_noop_noop_plusone) as Box<dyn MetaRasterOperator>,
+            other_meta_gdal_source as Box<dyn MetaRasterOperator>,
+        ],
+    };
+
     // somehow it is required to be in a box to use it...
     let meta_gdal_source_noop_noop_noop_box =
-        Box::new(meta_gdal_source_noop_noop_noop_noop_plusone) as Box<dyn MetaRasterOperator>;
+        Box::new(meta_gdal_source_noop_noop_noop_noop_plusone_plusother)
+            as Box<dyn MetaRasterOperator>;
     // create a BoxedRasterOperatorInstance.
     let operator_instance = meta_gdal_source_noop_noop_noop_box.create_raster_op();
     println!("meh");
@@ -562,7 +874,7 @@ fn main() {
     // create the processing oeprator
     let d_op = deserial.create_raster_op();
     // ....
-    if let BoxedRasterOperatorInstance::U8(r) = d_op {
+    if let BoxedRasterOperatorInstance::U16(r) = d_op {
         let meh = r.raster_query(Query);
         println!("{:?}", meh);
     }
