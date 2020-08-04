@@ -54,7 +54,7 @@ impl MetaRasterOperator for MetaNoopOperator {
         println!("MetaNoopOperator: create_u8_raster_op");
         let source = self.raster_sources()[0]
             .create_raster_op()
-            .as_u8()
+            .get_u8()
             .expect("not u8");
         Box::new(NoOpOperator::create::<u8>(source, "noop".to_string()))
     }
@@ -62,11 +62,32 @@ impl MetaRasterOperator for MetaNoopOperator {
         println!("MetaNoopOperator: create_u16_raster_op");
         let source = self.raster_sources()[0]
             .create_raster_op()
-            .as_u16()
+            .get_u16()
             .expect("not u8");
         Box::new(NoOpOperator::create::<u16>(source, "noop".to_string()))
     }
     fn raster_sources(&self) -> &[Box<dyn MetaRasterOperator>] {
         self.sources.as_slice()
+    }
+    fn create_u32_raster_op(&self) -> Box<dyn RasterSource<RasterType = u32>> {
+        todo!()
+    }
+    fn create_u64_raster_op(&self) -> Box<dyn RasterSource<RasterType = u64>> {
+        todo!()
+    }
+    fn create_i16_raster_op(&self) -> Box<dyn RasterSource<RasterType = i16>> {
+        todo!()
+    }
+    fn create_i32_raster_op(&self) -> Box<dyn RasterSource<RasterType = i32>> {
+        todo!()
+    }
+    fn create_i64_raster_op(&self) -> Box<dyn RasterSource<RasterType = i64>> {
+        todo!()
+    }
+    fn create_f32_raster_op(&self) -> Box<dyn RasterSource<RasterType = f32>> {
+        todo!()
+    }
+    fn create_f64_raster_op(&self) -> Box<dyn RasterSource<RasterType = f64>> {
+        todo!()
     }
 }

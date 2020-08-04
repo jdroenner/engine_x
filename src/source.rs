@@ -77,8 +77,17 @@ pub trait CreateBinaryOperator<S1, S2, P> {
     fn create<T1, T2>(source_a: S1, source_b: S2, params: P) -> Self;
 }
 
-pub trait CreateBinaryOperator2<P> {
-    fn create_from_boxes<T1, T2>(
+pub trait CreateBoxedUnaryOperator<P> {
+    fn create_unary_boxed<T1>(
+        source: Box<dyn RasterSource<RasterType = T1>>,
+        params: P,
+    ) -> Box<dyn RasterSource<RasterType = T1>>
+    where
+        T1: Add + AddAssign + One + Copy + 'static;
+}
+
+pub trait CreateBoxedBinaryOperatorInplace<P> {
+    fn create_binary_boxed<T1, T2>(
         source_a: Box<dyn RasterSource<RasterType = T1>>,
         source_b: Box<dyn RasterSource<RasterType = T2>>,
         params: P,
@@ -91,18 +100,67 @@ pub trait CreateBinaryOperator2<P> {
 pub enum BoxedRasterOperatorInstance {
     U8(Box<dyn RasterSource<RasterType = u8>>),
     U16(Box<dyn RasterSource<RasterType = u16>>),
+    U32(Box<dyn RasterSource<RasterType = u32>>),
+    U64(Box<dyn RasterSource<RasterType = u64>>),
+    I16(Box<dyn RasterSource<RasterType = i16>>),
+    I32(Box<dyn RasterSource<RasterType = i32>>),
+    I64(Box<dyn RasterSource<RasterType = i64>>),
+    F32(Box<dyn RasterSource<RasterType = f32>>),
+    F64(Box<dyn RasterSource<RasterType = f64>>),
 }
 
 impl BoxedRasterOperatorInstance {
-    pub fn as_u8(self) -> Option<Box<dyn RasterSource<RasterType = u8>>> {
+    pub fn get_u8(self) -> Option<Box<dyn RasterSource<RasterType = u8>>> {
         match self {
             BoxedRasterOperatorInstance::U8(r) => Some(r),
             _ => None,
         }
     }
-    pub fn as_u16(self) -> Option<Box<dyn RasterSource<RasterType = u16>>> {
+    pub fn get_u16(self) -> Option<Box<dyn RasterSource<RasterType = u16>>> {
         match self {
             BoxedRasterOperatorInstance::U16(r) => Some(r),
+            _ => None,
+        }
+    }
+    pub fn get_u32(self) -> Option<Box<dyn RasterSource<RasterType = u32>>> {
+        match self {
+            BoxedRasterOperatorInstance::U32(r) => Some(r),
+            _ => None,
+        }
+    }
+    pub fn get_u64(self) -> Option<Box<dyn RasterSource<RasterType = u64>>> {
+        match self {
+            BoxedRasterOperatorInstance::U64(r) => Some(r),
+            _ => None,
+        }
+    }
+    pub fn get_i16(self) -> Option<Box<dyn RasterSource<RasterType = i16>>> {
+        match self {
+            BoxedRasterOperatorInstance::I16(r) => Some(r),
+            _ => None,
+        }
+    }
+    pub fn get_i32(self) -> Option<Box<dyn RasterSource<RasterType = i32>>> {
+        match self {
+            BoxedRasterOperatorInstance::I32(r) => Some(r),
+            _ => None,
+        }
+    }
+    pub fn get_i64(self) -> Option<Box<dyn RasterSource<RasterType = i64>>> {
+        match self {
+            BoxedRasterOperatorInstance::I64(r) => Some(r),
+            _ => None,
+        }
+    }
+    pub fn get_f32(self) -> Option<Box<dyn RasterSource<RasterType = f32>>> {
+        match self {
+            BoxedRasterOperatorInstance::F32(r) => Some(r),
+            _ => None,
+        }
+    }
+    pub fn get_f64(self) -> Option<Box<dyn RasterSource<RasterType = f64>>> {
+        match self {
+            BoxedRasterOperatorInstance::F64(r) => Some(r),
             _ => None,
         }
     }

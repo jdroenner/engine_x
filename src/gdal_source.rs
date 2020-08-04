@@ -70,4 +70,54 @@ impl MetaRasterOperator for MetaGdalSource {
     fn raster_sources(&self) -> &[Box<dyn MetaRasterOperator>] {
         &[] // no sources!
     }
+    fn create_u32_raster_op(&self) -> Box<dyn RasterSource<RasterType = u32>> {
+        println!("MetaGdalSource: create_u8_raster_op");
+        Box::new(GdalSource {
+            dataset: "meh".to_string(),
+            data: PhantomData,
+        })
+    }
+    fn create_u64_raster_op(&self) -> Box<dyn RasterSource<RasterType = u64>> {
+        println!("MetaGdalSource: create_u8_raster_op");
+        Box::new(GdalSource {
+            dataset: "meh".to_string(),
+            data: PhantomData,
+        })
+    }
+    fn create_i16_raster_op(&self) -> Box<dyn RasterSource<RasterType = i16>> {
+        println!("MetaGdalSource: create_u8_raster_op");
+        Box::new(GdalSource {
+            dataset: "meh".to_string(),
+            data: PhantomData,
+        })
+    }
+    fn create_i32_raster_op(&self) -> Box<dyn RasterSource<RasterType = i32>> {
+        println!("MetaGdalSource: create_u8_raster_op");
+        Box::new(GdalSource {
+            dataset: "meh".to_string(),
+            data: PhantomData,
+        })
+    }
+    fn create_i64_raster_op(&self) -> Box<dyn RasterSource<RasterType = i64>> {
+        println!("MetaGdalSource: create_u8_raster_op");
+        Box::new(GdalSource {
+            dataset: "meh".to_string(),
+            data: PhantomData,
+        })
+    }
+    fn create_f32_raster_op(&self) -> Box<dyn RasterSource<RasterType = f32>> {
+        println!("MetaGdalSource: create_u8_raster_op");
+        Box::new(GdalSource {
+            dataset: "meh".to_string(),
+            data: PhantomData,
+        })
+    }
+
+    fn create_f64_raster_op(&self) -> Box<dyn RasterSource<RasterType = f64>> {
+        println!("MetaGdalSource: create_u8_raster_op");
+        Box::new(GdalSource {
+            dataset: "meh".to_string(),
+            data: PhantomData,
+        })
+    }
 }
