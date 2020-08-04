@@ -4,6 +4,14 @@ version = "0.1.0"
 authors = ["Johannes Drönner <droenner@informatik.uni-marburg.de>"]
 edition = "2018"
 
+[lib]
+name = "engine_x"
+path = "src/lib.rs"
+
+[[bin]]
+name = "mybin"
+path = "src/main.rs"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
