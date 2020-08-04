@@ -1,4 +1,6 @@
 use crate::primitives::Raster;
+use num_traits::One;
+use std::ops::{Add, AddAssign};
 
 /// The Query...
 #[derive(Debug, Clone, Copy)]
@@ -73,6 +75,17 @@ pub trait CreateUnaryOperator<S, P> {
 
 pub trait CreateBinaryOperator<S1, S2, P> {
     fn create<T1, T2>(source_a: S1, source_b: S2, params: P) -> Self;
+}
+
+pub trait CreateBinaryOperator2<P> {
+    fn create_from_boxes<T1, T2>(
+        source_a: Box<dyn RasterSource<RasterType = T1>>,
+        source_b: Box<dyn RasterSource<RasterType = T2>>,
+        params: P,
+    ) -> Box<dyn RasterSource<RasterType = T1>>
+    where
+        T1: Add + AddAssign + One + Copy + 'static,
+        T2: Add + AddAssign + One + Into<T1> + Copy + 'static;
 }
 
 pub enum BoxedRasterOperatorInstance {
