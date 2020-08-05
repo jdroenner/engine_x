@@ -1,7 +1,9 @@
 use crate::{
     primitives::Point,
     source::{CreateSourceOperator, Query, Source},
+    MetaOperator, MetaVectorOperator,
 };
+use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 
 /// MyVectorSource is a mock VectorSource
@@ -26,5 +28,30 @@ impl<T> CreateSourceOperator<String> for MyVectorSource<T> {
             data: PhantomData,
             dataset: params,
         }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct MetaMyVectorSourceOperator {}
+
+impl MetaOperator for MetaMyVectorSourceOperator {
+    fn raster_sources(&self) -> &[Box<dyn crate::MetaRasterOperator>] {
+        &[]
+    }
+    fn vector_sources(&self) -> &[Box<dyn MetaVectorOperator>] {
+        &[]
+    }
+}
+
+#[typetag::serde]
+impl MetaVectorOperator for MetaMyVectorSourceOperator {
+    fn creates_collection_type(&self) -> () {
+        ()
+    }
+    fn create_point_op(&self) -> Box<dyn crate::VectorSource<VectorType = crate::Point>> {
+        Box::new(MyVectorSource {
+            dataset: "dataset".to_string(),
+            data: PhantomData,
+        })
     }
 }

@@ -1,7 +1,7 @@
 use crate::{
-    meta_raster_operator::{MetaRasterOperator, RasterCreates, RasterWants},
+    meta_raster_operator::{MetaRasterOperator, RasterWants},
     source::{CreateUnaryOperator, Query, RasterSource, Source},
-    MetaOperator,
+    MetaOperator, RasterType,
 };
 use serde::{Deserialize, Serialize};
 use typetag;
@@ -42,9 +42,6 @@ impl MetaNoopOperator {
 }
 
 impl MetaOperator for MetaNoopOperator {
-    fn requires_type(&self) -> &[RasterWants] {
-        &MetaNoopOperator::REQUIRES_TYPES
-    }
     fn raster_sources(&self) -> &[Box<dyn MetaRasterOperator>] {
         self.sources.as_slice()
     }
@@ -53,7 +50,7 @@ impl MetaOperator for MetaNoopOperator {
 // impl MetaNoopOperator for MetaRasterOperator
 #[typetag::serde]
 impl MetaRasterOperator for MetaNoopOperator {
-    fn creates_type(&self) -> RasterCreates {
+    fn creates_type(&self) -> RasterType {
         self.sources[0].creates_type() // this sould be same as input 1. need to handle this somewhere.
     }
 

@@ -1,5 +1,5 @@
 use crate::{
-    meta_raster_operator::{MetaRasterOperator, RasterCreates, RasterWants},
+    meta_raster_operator::MetaRasterOperator,
     primitives::Raster,
     raster_type::RasterType,
     source::{CreateSourceOperator, Query, RasterSource, Source},
@@ -45,11 +45,6 @@ pub struct MetaGdalSource {
 }
 
 impl MetaOperator for MetaGdalSource {
-    fn requires_type(&self) -> &[RasterWants] {
-        // NO inputs so no requirements
-        &[]
-    }
-
     fn raster_sources(&self) -> &[Box<dyn MetaRasterOperator>] {
         &[] // no sources!
     }
@@ -57,8 +52,8 @@ impl MetaOperator for MetaGdalSource {
 
 #[typetag::serde]
 impl MetaRasterOperator for MetaGdalSource {
-    fn creates_type(&self) -> RasterCreates {
-        RasterCreates::ConceteType(self.raster_type) // TODO: need to look this up!
+    fn creates_type(&self) -> RasterType {
+        self.raster_type // TODO: need to look this up!
     }
 
     fn create_u8_raster_op(&self) -> Box<dyn RasterSource<RasterType = u8>> {

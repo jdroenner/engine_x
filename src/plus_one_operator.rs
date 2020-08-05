@@ -1,9 +1,9 @@
 use crate::{
-    meta_raster_operator::{MetaRasterOperator, RasterCreates, RasterWants},
+    meta_raster_operator::{MetaRasterOperator, RasterWants},
     operator_creation,
     primitives::Raster,
     source::{CreateUnaryOperator, Query, RasterSource, Source},
-    CreateBoxedUnaryOperator, MetaOperator,
+    CreateBoxedUnaryOperator, MetaOperator, RasterType,
 };
 use num_traits::One;
 use serde::{Deserialize, Serialize};
@@ -59,9 +59,6 @@ impl CreateBoxedUnaryOperator<String> for MetaPlusOneOperator {
 }
 
 impl MetaOperator for MetaPlusOneOperator {
-    fn requires_type(&self) -> &[RasterWants] {
-        &MetaPlusOneOperator::REQUIRES_TYPES
-    }
     fn raster_sources(&self) -> &[Box<dyn MetaRasterOperator>] {
         self.sources.as_slice()
     }
@@ -69,7 +66,7 @@ impl MetaOperator for MetaPlusOneOperator {
 
 #[typetag::serde]
 impl MetaRasterOperator for MetaPlusOneOperator {
-    fn creates_type(&self) -> RasterCreates {
+    fn creates_type(&self) -> RasterType {
         self.sources[0].creates_type()
     }
 
