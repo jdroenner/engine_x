@@ -27,9 +27,31 @@ pub enum RasterWants {
     None,
 }
 
+pub trait MetaOperator {
+    /// get the types the operator generates.
+    fn requires_type(&self) -> &[RasterWants];
+
+    /// get the sources of the Operator. TODO: extra trait?
+    fn raster_sources(&self) -> &[Box<dyn MetaRasterOperator>];
+    //fn raster_sources(&self) -> &[&dyn MetaRasterOperator];
+
+    /// get the types the operator generates.
+    fn requires_collection(&self) -> &[RasterWants] {
+        &[]
+    }
+
+    /// get the sources of the Operator. TODO: extra trait?
+    fn vector_sources(&self) -> &[Box<dyn MetaRasterOperator>] {
+        &[]
+    }
+}
+
+#[typetag::serde(tag = "type")]
+pub trait MetaVectorOperator: MetaOperator {}
+
 /// The MetaRasterOperator is a trait for MetaOperators creating RasterOperators for processing Raster data
 #[typetag::serde(tag = "type")]
-pub trait MetaRasterOperator {
+pub trait MetaRasterOperator: MetaOperator {
     /// The magic method to handle the mapping of the create type to a concrete implementation. More work required! TODO: macro?
     fn create_raster_op(&self) -> BoxedRasterOperatorInstance {
         println!("MetaRasterOperator: create_raster_op");
@@ -62,12 +84,6 @@ pub trait MetaRasterOperator {
 
     /// get the type the Operator creates.
     fn creates_type(&self) -> RasterCreates;
-    /// get the types the operator generates.
-    fn requires_type(&self) -> &[RasterWants];
-
-    /// get the sources of the Operator. TODO: extra trait?
-    fn raster_sources(&self) -> &[Box<dyn MetaRasterOperator>];
-    //fn raster_sources(&self) -> &[&dyn MetaRasterOperator];
 }
 
 pub mod operator_creation {

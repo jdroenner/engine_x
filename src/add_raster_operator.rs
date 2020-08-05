@@ -3,7 +3,7 @@ use crate::{
     operator_creation,
     primitives::Raster,
     source::{CreateBinaryOperator, Query, RasterSource, Source},
-    CreateBoxedBinaryOperatorInplace,
+    CreateBoxedBinaryOperatorInplace, MetaOperator,
 };
 use num_traits::One;
 use serde::{Deserialize, Serialize};
@@ -73,13 +73,19 @@ impl MetaAddRasterOperator {
     pub const REQUIRES_TYPES: [RasterWants; 2] = [RasterWants::Any, RasterWants::Any];
 }
 
+impl MetaOperator for MetaAddRasterOperator {
+    fn requires_type(&self) -> &[RasterWants] {
+        &MetaAddRasterOperator::REQUIRES_TYPES
+    }
+    fn raster_sources(&self) -> &[Box<dyn MetaRasterOperator>] {
+        self.sources.as_slice()
+    }
+}
+
 #[typetag::serde]
 impl MetaRasterOperator for MetaAddRasterOperator {
     fn creates_type(&self) -> RasterCreates {
         self.sources[0].creates_type()
-    }
-    fn requires_type(&self) -> &[RasterWants] {
-        &MetaAddRasterOperator::REQUIRES_TYPES
     }
 
     fn create_u8_raster_op(&self) -> Box<dyn RasterSource<RasterType = u8>> {
@@ -94,9 +100,7 @@ impl MetaRasterOperator for MetaAddRasterOperator {
             self.sources[0].create_raster_op(),
         )
     }
-    fn raster_sources(&self) -> &[Box<dyn MetaRasterOperator>] {
-        self.sources.as_slice()
-    }
+
     fn create_u32_raster_op(&self) -> Box<dyn RasterSource<RasterType = u32>> {
         todo!()
     }

@@ -3,6 +3,7 @@ use crate::{
     primitives::Raster,
     raster_type::RasterType,
     source::{CreateSourceOperator, Query, RasterSource, Source},
+    MetaOperator,
 };
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
@@ -43,14 +44,21 @@ pub struct MetaGdalSource {
     pub raster_type: RasterType,
 }
 
+impl MetaOperator for MetaGdalSource {
+    fn requires_type(&self) -> &[RasterWants] {
+        // NO inputs so no requirements
+        &[]
+    }
+
+    fn raster_sources(&self) -> &[Box<dyn MetaRasterOperator>] {
+        &[] // no sources!
+    }
+}
+
 #[typetag::serde]
 impl MetaRasterOperator for MetaGdalSource {
     fn creates_type(&self) -> RasterCreates {
         RasterCreates::ConceteType(self.raster_type) // TODO: need to look this up!
-    }
-    fn requires_type(&self) -> &[RasterWants] {
-        // NO inputs so no requirements
-        &[]
     }
 
     fn create_u8_raster_op(&self) -> Box<dyn RasterSource<RasterType = u8>> {
@@ -67,9 +75,7 @@ impl MetaRasterOperator for MetaGdalSource {
             data: PhantomData,
         })
     }
-    fn raster_sources(&self) -> &[Box<dyn MetaRasterOperator>] {
-        &[] // no sources!
-    }
+
     fn create_u32_raster_op(&self) -> Box<dyn RasterSource<RasterType = u32>> {
         println!("MetaGdalSource: create_u8_raster_op");
         Box::new(GdalSource {

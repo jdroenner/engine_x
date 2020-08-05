@@ -1,6 +1,7 @@
 use crate::{
     meta_raster_operator::{MetaRasterOperator, RasterCreates, RasterWants},
     source::{CreateUnaryOperator, Query, RasterSource, Source},
+    MetaOperator,
 };
 use serde::{Deserialize, Serialize};
 use typetag;
@@ -40,14 +41,20 @@ impl MetaNoopOperator {
     pub const REQUIRES_TYPES: [RasterWants; 1] = [RasterWants::Any];
 }
 
+impl MetaOperator for MetaNoopOperator {
+    fn requires_type(&self) -> &[RasterWants] {
+        &MetaNoopOperator::REQUIRES_TYPES
+    }
+    fn raster_sources(&self) -> &[Box<dyn MetaRasterOperator>] {
+        self.sources.as_slice()
+    }
+}
+
 // impl MetaNoopOperator for MetaRasterOperator
 #[typetag::serde]
 impl MetaRasterOperator for MetaNoopOperator {
     fn creates_type(&self) -> RasterCreates {
         self.sources[0].creates_type() // this sould be same as input 1. need to handle this somewhere.
-    }
-    fn requires_type(&self) -> &[RasterWants] {
-        &MetaNoopOperator::REQUIRES_TYPES
     }
 
     fn create_u8_raster_op(&self) -> Box<dyn RasterSource<RasterType = u8>> {
@@ -66,9 +73,7 @@ impl MetaRasterOperator for MetaNoopOperator {
             .expect("not u8");
         Box::new(NoOpOperator::create::<u16>(source, "noop".to_string()))
     }
-    fn raster_sources(&self) -> &[Box<dyn MetaRasterOperator>] {
-        self.sources.as_slice()
-    }
+
     fn create_u32_raster_op(&self) -> Box<dyn RasterSource<RasterType = u32>> {
         todo!()
     }
